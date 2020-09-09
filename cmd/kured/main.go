@@ -82,7 +82,7 @@ func main() {
 		"alert names to ignore when checking for active alerts")
 	rootCmd.PersistentFlags().StringVar(&rebootSentinel, "reboot-sentinel", "/var/run/reboot-required",
 		"path to file whose existence signals need to run command")
-	rootCmd.PersistentFlags().StringVar(&command, "command", "reboot",
+	rootCmd.PersistentFlags().StringVar(&command, "command", "/bin/systemctl reboot",
 		"systemctl command to run when sentinel is found, default: reboot")
 
 	rootCmd.PersistentFlags().StringVar(&slackHookURL, "slack-hook-url", "",
@@ -268,7 +268,7 @@ func commandReboot(nodeID string) {
 	}
 
 	// Relies on hostPID:true and privileged:true to enter host mount space
-	rebootCmd := newCommand("/usr/bin/nsenter", "-m/proc/1/ns/mnt", "/bin/systemctl", command)
+	rebootCmd := newCommand("/usr/bin/nsenter", "-m/proc/1/ns/mnt", command)
 	if err := rebootCmd.Run(); err != nil {
 		log.Fatalf("Error invoking %s command: %v", command, err)
 	}
@@ -358,6 +358,8 @@ func root(cmd *cobra.Command, args []string) {
 	log.Infof("Reboot Sentinel: %s every %v", rebootSentinel, period)
 	log.Infof("Blocking Pod Selectors: %v", podSelectors)
 	log.Infof("Reboot on: %v", window)
+	log.Infof("Command on: %v", window)
+	log.Infof("Command: %s", command)
 
 	go rebootAsRequired(nodeID, window, lockTTL)
 	go maintainRebootRequiredMetric(nodeID)
