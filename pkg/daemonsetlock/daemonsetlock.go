@@ -20,10 +20,9 @@ type DaemonSetLock struct {
 }
 
 type lockAnnotationValue struct {
-	NodeID   string        `json:"nodeID"`
-	Metadata interface{}   `json:"metadata,omitempty"`
-	Created  time.Time     `json:"created"`
-	TTL      time.Duration `json:"TTL"`
+	NodeID   string      `json:"nodeID"`
+	Metadata interface{} `json:"metadata,omitempty"`
+	Created  time.Time   `json:"created"`
 }
 
 func New(client *kubernetes.Clientset, nodeID, namespace, name, annotation string) *DaemonSetLock {
@@ -44,17 +43,15 @@ func (dsl *DaemonSetLock) Acquire(metadata interface{}, TTL time.Duration) (acqu
 				return false, "", err
 			}
 
-			if ttlExpired(value.Created, value.TTL) {
-				return true, value.NodeID, nil
+			if !ttlExpired(value.Created, TTL) {
+				return value.NodeID == dsl.nodeID, value.NodeID, nil
 			}
-
-			return value.NodeID == dsl.nodeID, value.NodeID, nil
 		}
 
 		if ds.ObjectMeta.Annotations == nil {
 			ds.ObjectMeta.Annotations = make(map[string]string)
 		}
-		value := lockAnnotationValue{NodeID: dsl.nodeID, Metadata: metadata, Created: time.Now().UTC(), TTL: TTL}
+		value := lockAnnotationValue{NodeID: dsl.nodeID, Metadata: metadata, Created: time.Now().UTC()}
 		valueBytes, err := json.Marshal(&value)
 		if err != nil {
 			return false, "", err
@@ -88,11 +85,9 @@ func (dsl *DaemonSetLock) Test(metadata interface{}) (holding bool, err error) {
 			return false, err
 		}
 
-		if ttlExpired(value.Created, value.TTL) {
-			return true, nil
+		if !ttlExpired(value.Created, 0) {
+			return value.NodeID == dsl.nodeID, nil
 		}
-
-		return value.NodeID == dsl.nodeID, nil
 	}
 
 	return false, nil
@@ -111,7 +106,8 @@ func (dsl *DaemonSetLock) Release() error {
 			if err := json.Unmarshal([]byte(valueString), &value); err != nil {
 				return err
 			}
-			if value.NodeID != dsl.nodeID && !ttlExpired(value.Created, value.TTL) {
+
+			if value.NodeID != dsl.nodeID {
 				return fmt.Errorf("Not lock holder: %v", value.NodeID)
 			}
 		} else {
